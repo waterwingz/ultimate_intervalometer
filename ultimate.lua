@@ -713,7 +713,7 @@ function check_dow()
             return false
         end
     elseif (dow_mode == 2) then
-        if ()(dow == 0) or (dow == 6) then
+        if ((dow == 0) or (dow == 6)) then
             return true
         else
             return false
