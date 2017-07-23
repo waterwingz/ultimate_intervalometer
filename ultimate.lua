@@ -75,21 +75,27 @@ end
 
 -- configure HDR shooting
 hdr_offset = (hdr_offset + 1) * 32
+tv_offset = 0
+sv_offset = 0
+av_offset = 0
 if (hdr_mode == 2) then
     tv_offset = hdr_offset
-else
-    tv_offset = 0
 end
 if (hdr_mode == 3) then
     sv_offset = hdr_offset
-else
-    sv_offset = 0
 end
 if (hdr_mode == 4) then
     av_offset = hdr_offset
-else
-    av_offset = 0
 end
+
+tv96current = 0
+av96current = 0
+sv96current = 0
+bv96current = 0
+ev96current = 0
+
+day_time_start = 0
+day_time_stop = 0
 
 -- constants
 SHORTCUT_KEY = "print" -- edit this if using shortcut key to enter sleep mode
@@ -101,6 +107,7 @@ PLAYBACK = 0 --
 SHOOTING = 1 --
 propset = get_propset()
 pTV = props.TV
+pTV2 = nil
 if (propset > 3) then
     pTV2 = props.TV2
 end
@@ -120,6 +127,9 @@ shot_counter = 0
 sd_card_full = false
 elapsed_days = 0
 jpg_count = nil
+starting_tick_count = nil
+oldest_img_num = nil
+oldest_img_dir = nil
 
 -- restore : called when script shuts down for good
 function restore()
@@ -160,7 +170,7 @@ function lprintf(...)
         local logname = "A/ultimate.log"
         local retry = 0
         repeat
-            log = io.open(logname, "a")
+            local log = io.open(logname, "a")
             if (log ~= nil) then
                 local ss = "Day " .. tostring(elapsed_days) .. " "
                 if (elapsed_days == 0) then
@@ -194,6 +204,8 @@ function printf(...)
 end
 
 function pline(line, message) -- print line function
+    local fg
+    local bg
     if (theme == 1) then
         if (line == 1) then
             fg = 258
@@ -237,6 +249,7 @@ tv_str = {
     "1/160", "1/200", "1/250", "1/320", "1/400", "1/500", "1/640", "1/800", "1/1000","1/1250",
     "1/1600","1/2000","1/2500","1/3200","1/4000","1/5000","1/6400","1/8000","1/10000","hi" }
 
+-- Convert the tv val into a human-readable string representing seconds
 function tv2seconds(tv_val)
     local i = 1
     while (i <= #tv_ref) and (tv_val > tv_ref[i] - 1) do
@@ -297,6 +310,7 @@ function show_status_box()
             dt = "Night"
         end
     end
+    local sd_space
     if (jpg_count == "nil") then
         sd_space = "???"
     else
@@ -343,7 +357,7 @@ end
 function update_zoom(zpos)
     local count = 0
     if (zpos ~= nil) then
-        zstep = ((get_zoom_steps() - 1) * zpos) / 100
+        local zstep = ((get_zoom_steps() - 1) * zpos) / 100
         printf("setting zoom to " .. zpos .. " percent step=" .. zstep)
         sleep(200)
         set_zoom(zstep)
@@ -380,6 +394,7 @@ function toggle_display_key(mode)
         dmode = 2
     end
     sleep(200)
+    local disp
     repeat
         disp = get_prop(props.DISPLAY_MODE)
         if (disp ~= dmode) then
@@ -425,6 +440,8 @@ function activate_display(seconds) -- seconds=0 for turn off display, >0 turn on
         if (display_hold_timer > 0) then -- do nothing until display hold timer expires
             display_hold_timer = display_hold_timer + seconds
         else
+            local newstate
+            local st
             if (seconds == 0) then -- request to turn display off ?
                 newstate = false
                 st = "off"
@@ -564,6 +581,7 @@ function locate_next_file(inum, idir)
 
     --fill a table with A/DCIM subdirectory names
     local dcim, ud = os.idir('A/DCIM', false)
+    local dname
     repeat
         dname = dcim(ud)
         if ((dname ~= nil) and (tonumber(string.sub(dname, 1, 3)) ~= nil)) then
@@ -574,12 +592,12 @@ function locate_next_file(inum, idir)
     dcim(ud, false) -- ensure directory handle is closed
 
     -- find a folder where the first three digits have incremented by one and look for next image there
-    dir_num = tonumber(string.sub(idir, 1, 3)) + 1
+    local dir_num = tonumber(string.sub(idir, 1, 3)) + 1
     if (dir_num > 999) then
         dir_num = 100
     end
     for folder = 1, folders, 1 do
-        test_num = tonumber(string.sub(folder_names[folder], 1, 3))
+        local test_num = tonumber(string.sub(folder_names[folder], 1, 3))
         if (test_num ~= nil) then
             if (test_num == dir_num) then
                 local f = io.open(string.format("A/DCIM/%s/IMG_%04d.JPG", folder_names[folder], inum), "r")
@@ -648,7 +666,7 @@ function remove_oldest_images(num)
             shooting_flag = true
         end
         for i = 1, num, 1 do
-            result1, result2 = remove_next_old_image(oldest_img_num, oldest_img_dir)
+            local result1, result2 = remove_next_old_image(oldest_img_num, oldest_img_dir)
             if (result1 == nil) then
                 break
             end -- failed so run away
@@ -832,8 +850,6 @@ end
 
 -- initial run tracking data
 elapsed_days = 1
-oldest_img_num = nil
-oldest_img_dir = nil
 
 -- test is this is regular start or a reboot ?
 if (autostarted()) then
@@ -905,6 +921,9 @@ timestamp = get_current_time()
 ticsec = 0
 ticmin = 0
 next_shot_time = get_next_shot_time()
+batt_trip_count = 0
+shotstring = ""
+fstop = nil
 get_start_stop_times()
 update_day_or_night_mode()
 activate_display(60) -- activate the display for 60 seconds
@@ -918,7 +937,7 @@ show_msg_box("...starting")
 repeat
     repeat
         -- get time of day and check for midnight roll-over
-        now = get_current_time()
+        local now = get_current_time()
         if (now < timestamp) then
             printf("starting a new day")
             next_shot_time = 0 -- midnight is alway a valid shot time if in ACTIVE mode
@@ -1049,8 +1068,8 @@ repeat
                         sleep(500)
                         get_exposure()
                         for i = 0 - hdr_shots, hdr_shots, 1 do
-                            ecnt = get_exp_count()
-                            tv = tv96current + hdr_offset * i
+                            local ecnt = get_exp_count()
+                            local tv = tv96current + hdr_offset * i
                             set_prop(pTV, tv)
                             if (propset > 3) then
                                 set_prop(pTV2, tv)
