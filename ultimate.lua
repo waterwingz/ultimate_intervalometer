@@ -1,14 +1,14 @@
 --[[
 
-Ultimate Intervalometer v4.6
+Ultimate Intervalometer v4.7
 
 Licence: GPL (c) 2013, 2014, 2015, 2016, 2017 waterwingz
 thx to msl for code adapted for dawn_and_dusk() and tv2seconds()
 
   Please check for the latest version (and documentation) at :
-     http://chdk.wikia.com/wiki/Ultimate_Intervalometersl ult
+     http://chdk.wikia.com/wiki/Ultimate_Intervalometer
 
-@title Ultimate v4.6
+@title Ultimate v4.7
 @chdk_version 1.4
 
 # shot_interval      3     "Shot Interval" { 10sec 20sec 30sec 1min 2min 5min 10min 15min 20min 30min 1hr 2hr 4hr }
@@ -838,7 +838,7 @@ end
 
 set_console_layout(0, 1, 48, 6)
 now = get_current_time()
-printf("=== Ultimate v4.6 : %02d:%02d ===", now / 3600, now % 3600 / 60)
+printf("=== Ultimate v4.7 : %02d:%02d ===", now / 3600, now % 3600 / 60)
 bi = get_buildinfo()
 printf("%s %s %s %s %s", bi.version, bi.build_number, bi.platform, bi.platsub, bi.build_date)
 version = tonumber(string.sub(bi.build_number, 1, 1)) * 100 + tonumber(string.sub(bi.build_number, 3, 3)) * 10 + tonumber(string.sub(bi.build_number, 5, 5))
